@@ -28,12 +28,12 @@ class statistics:
         print("Input array should have dimensions (ensemble,year,month,lat)")
         self.var = var
 
-    def anomaly(self, Dim_month=True):
+    def anomaly(self, Dim_ens=True):
         """
         Remove seasonal cycling for monthly data.
-        param Dim_month: there are two modes for removing the seasonal cycling
-        -True (default) input time series have month dimension [...,year,month,...]
-        -False input time series have only 1 dimension for time
+        param Dim_ens: there are two modes for removing the seasonal cycling
+        -True (default) input time series have ensemble dimension [ensemble,year,month,...]
+        -False input time series do not have ensemble dimension
         param white_var: time series without seasonal cycling
         return: time series
         rtype: numpy.array
@@ -42,19 +42,10 @@ class statistics:
         white_var = np.zeros(self.var.shape, dtype=float)
 
         #switch mode
-        if Dim_month == True:
-            print ('The input data has the dimension of month.')
-            if self.var.ndim >2:
-                print('Ensemble member should always be the first dimension!')
+        if Dim_ens == True:
+            print('Ensemble member should always be the first dimension!')
             # check the dimension of input
-            if self.var.ndim == 2:
-                seansonal_cycle_var = np.mean(self.var, axis=0)
-                t, m = white_var.shape
-                for i in np.arange(t):
-                        white_var[i,:] = self.var[i,:] - seansonal_cycle_var[:]
-                # re-arrange into single time series - without month dimension
-                white_var = white_var.reshape(t*m)
-            elif self.var.ndim == 3:
+            if self.var.ndim == 3:
                 seansonal_cycle_var = np.mean(self.var, axis=1)
                 e, t, m = white_var.shape
                 for i in np.arange(t):
@@ -70,33 +61,33 @@ class statistics:
                 white_var = white_var.reshape(e,t*m,y)
             else:
                 raise IOError("This module can not work with any array with a \
-                              dimension higher than 4!")
+                              dimension other than 3 or 4!")
         else:
-            print ('The input data does not have the dimension of month.')
-            if self.var.ndim >1:
-                print('Ensemble member should always be the first dimension!')
-            if self.var.ndim == 1:
-                for i in np.arange(12):
-                    seansonal_cycle_var = np.mean(self.var[i::12],axis=0)
-                    white_var[i::12] = self.var[i::12] - seansonal_cycle_var
-            elif self.var.ndim == 2:
-                for i in np.arange(12):
-                    seansonal_cycle_var = np.mean(self.var[:,i::12],axis=1)
-                    white_var[:,i::12] = self.var[:,i::12] - seansonal_cycle_var
+            print ('The input data does not have the dimension of ensemble.')
+            if self.var.ndim == 2:
+                seansonal_cycle_var = np.mean(self.var, axis=0)
+                t, m = white_var.shape
+                for i in np.arange(t):
+                        white_var[i,:] = self.var[i,:] - seansonal_cycle_var[:]
+                # re-arrange into single time series - without month dimension
+                white_var = white_var.reshape(t*m)
             elif self.var.ndim == 3:
-                for i in np.arange(12):
-                    seansonal_cycle_var = np.mean(self.var[:,i::12,:],axis=1)
-                    white_var[:,i::12,:] = self.var[:,i::12,:] - seansonal_cycle_var
+                seansonal_cycle_var = np.mean(self.var, axis=0)
+                t, m, y = white_var.shape
+                for i in np.arange(t):
+                        white_var[i,:,:] = self.var[i,:,:] - seansonal_cycle_var[:]
+                # re-arrange into single time series - without month dimension
+                white_var = white_var.reshape(t*m,y)
             else:
                 raise IOError("This module can not work with any array with a \
-                              dimension higher than 3!")
+                              dimension other than 2 or 3!")
         self._anomaly = white_var
 
         print ("The output anomaly time series only contains one dimension for time!")
 
         return self._anomaly
 
-    def detrend(self, order=2, obj='anomaly'):
+    def detrend(self, order=2, obj='anomaly', Dim_ens=True):
         """
         Detrend time series through polynomial fit.
         param series: input time series, either 1D or 2/3D
@@ -115,34 +106,48 @@ class statistics:
         else:
             raise IOError("Please choose the right input mode for detrending!")
         # check the dimension of input
-        if series.ndim == 1:
-            polynomial = np.polyfit(np.arange(len(series)), series, order)
-            poly_fit = np.poly1d(polynomial)
-            poly_fit_var = poly_fit(np.arange(len(series)))
-        elif series.ndim == 2:
-            poly_fit_var = np.zeros(series.shape, dtype=float)
-            e, t = poly_fit_var.shape
-            for i in np.arange(e):
-                polynomial = np.polyfit(np.arange(t), series[i,:], order)
-                poly_fit = np.poly1d(polynomial)
-                poly_fit_var[i,:] = poly_fit(np.arange(t))
-        elif series.ndim == 3:
-            poly_fit_var = np.zeros(series.shape, dtype=float)
-            e, t, y = poly_fit_var.shape
-            for i in np.arange(e):
-                for j in np.arange(y):
-                    polynomial = np.polyfit(np.arange(t), series[i,:,j], order)
+        if Dim_ens == True:
+            print('Ensemble member should always be the first dimension!')
+            # check the dimension of input
+            if series.ndim == 2:
+                poly_fit_var = np.zeros(series.shape, dtype=float)
+                e, t = poly_fit_var.shape
+                for i in np.arange(e):
+                    polynomial = np.polyfit(np.arange(t), series[i,:], order)
                     poly_fit = np.poly1d(polynomial)
-                    poly_fit_var[i,:,j] = poly_fit(np.arange(t))
+                    poly_fit_var[i,:] = poly_fit(np.arange(t))
+            elif series.ndim == 3:
+                poly_fit_var = np.zeros(series.shape, dtype=float)
+                e, t, y = poly_fit_var.shape
+                for i in np.arange(e):
+                    for j in np.arange(y):
+                        polynomial = np.polyfit(np.arange(t), series[i,:,j], order)
+                        poly_fit = np.poly1d(polynomial)
+                        poly_fit_var[i,:,j] = poly_fit(np.arange(t))
+            else:
+                raise IOError("This module can not work with any array with a \
+                                dimension other than 2 or 3!")
         else:
-            raise IOError("This module can not work with any array with a \
-                            dimension higher than 3!")
+            if series.ndim == 1:
+                polynomial = np.polyfit(np.arange(len(series)), series, order)
+                poly_fit = np.poly1d(polynomial)
+                poly_fit_var = poly_fit(np.arange(len(series)))
+            elif series.ndim == 2:
+                poly_fit_var = np.zeros(series.shape, dtype=float)
+                t, y = poly_fit_var.shape
+                for i in np.arange(y):
+                    polynomial = np.polyfit(np.arange(t), series[:,i], order)
+                    poly_fit = np.poly1d(polynomial)
+                    poly_fit_var[:,i] = poly_fit(np.arange(t))
+            else:
+                raise IOError("This module can not work with any array with a \
+                              dimension other than 1 or 2!")                       
         self._polyfit = poly_fit_var
         self._detrend = series - self._polyfit
 
         return self._detrend
     
-    def trend(self,obj='anomaly'):
+    def trend(self,obj='anomaly', Dim_ens=True):
         """
         Compute the trend for the given time series through least square fit.
         param series: input time series, either 1D or 2/3D
@@ -159,40 +164,54 @@ class statistics:
             series = self.var
         else:
             raise IOError("Please choose the right input mode for calculating the linear trend!")
-        # check the dimension of input
-        if series.ndim == 1:
-            t = len(series)
-            # the least square fit equation is y = ax + b
-            # np.lstsq solves the equation ax=b, a & b are the input
-            # thus the input file should be reformed for the function
-            # we can rewrite the line y = Ap, with A = [x,1] and p = [[a],[b]]
-            A = np.vstack([np.arange(t),np.ones(t)]).T
-            # start the least square fitting
-            # return value: coefficient matrix a and b, where a is the slope
-            a, b = np.linalg.lstsq(A,series)[0]
-        elif series.ndim == 2:
-            e, t = series.shape
-            # create an array to store the slope coefficient and residual
-            a = np.zeros(e,dtype = float)
-            b = np.zeros(e,dtype = float)
-            A = np.vstack([np.arange(t),np.ones(t)]).T
-            for i in np.arange(e):
-                a[i], b[i] = np.linalg.lstsq(A,series[i,:])[0]
-        elif series.ndim == 3:
-            e, t, y = series.shape
-            a = np.zeros((e,y),dtype = float)
-            b = np.zeros((e,y),dtype = float)
-            A = np.vstack([np.arange(t),np.ones(t)]).T
-            for i in np.arange(e):
-                for j in np.arange(y):
-                    a[i,j], b[i,j] = np.linalg.lstsq(A,series[i,:,j])[0]
+        if Dim_ens == True:
+            print('Ensemble member should always be the first dimension!')
+            # check the dimension of input
+            if series.ndim == 2:
+                e, t = series.shape
+                # create an array to store the slope coefficient and residual
+                a = np.zeros(e,dtype = float)
+                b = np.zeros(e,dtype = float)
+                A = np.vstack([np.arange(t),np.ones(t)]).T
+                for i in np.arange(e):
+                    a[i], b[i] = np.linalg.lstsq(A,series[i,:])[0]
+            elif series.ndim == 3:
+                e, t, y = series.shape
+                a = np.zeros((e,y),dtype = float)
+                b = np.zeros((e,y),dtype = float)
+                A = np.vstack([np.arange(t),np.ones(t)]).T
+                for i in np.arange(e):
+                    for j in np.arange(y):
+                        a[i,j], b[i,j] = np.linalg.lstsq(A,series[i,:,j])[0]
+            else:
+                raise IOError("This module can not work with any array with a \
+                               dimension other than 2 or 3!")
         else:
-            raise IOError("This module can not work with any array with a \
-                            dimension higher than 3!")                    
-        self.a = a
+            if series.ndim == 1:
+                t = len(series)
+                # the least square fit equation is y = ax + b
+                # np.lstsq solves the equation ax=b, a & b are the input
+                # thus the input file should be reformed for the function
+                # we can rewrite the line y = Ap, with A = [x,1] and p = [[a],[b]]
+                A = np.vstack([np.arange(t),np.ones(t)]).T
+                # start the least square fitting
+                # return value: coefficient matrix a and b, where a is the slope
+                a, b = np.linalg.lstsq(A,series)[0]
+            elif series.ndim == 2:
+                t, y = series.shape
+                a = np.zeros((y),dtype = float)
+                b = np.zeros((y),dtype = float)
+                A = np.vstack([np.arange(t),np.ones(t)]).T
+                for i in np.arange(y):
+                    a[i], b[i] = np.linalg.lstsq(A,series[:,i])[0]
+            else:
+                raise IOError("This module can not work with any array with a \
+                              dimension other than 1 or 2!")
+                
+        self._a = a
         return self._a
 
-    def lowpass(self, window=60, obj='anomaly'):
+    def lowpass(self, window=60, obj='anomaly', Dim_ens=True):
         """
         Apply low pass filter to the time series. The function gives running mean
         for the point AT The End Of The Window!!
@@ -212,24 +231,37 @@ class statistics:
         elif obj == 'detrend':
             series = self._detrend
         # check the dimension of input
-        if series.ndim == 1:
-            t = len(series)
-            running_mean = np.zeros(t-window+1, dtype=float)
-            for i in np.arange(t-window+1):
-                running_mean[i] = np.mean(series[i:i+window])
-        elif series.ndim == 2:
-            e, t  = series.shape
-            running_mean = np.zeros((e, t-window+1), dtype=float)
-            for i in np.arange(t-window+1):
-                running_mean[:,i] = np.mean(series[:,i:i+window],1)
-        elif series.ndim == 3:
-            e, t, y = series.shape
-            running_mean = np.zeros((e, t-window+1, y), dtype=float)
-            for i in np.arange(t-window+1):
-                running_mean[:,i,:] = np.mean(series[:,i:i+window,:],1)
+        if Dim_ens == True:
+            print('Ensemble member should always be the first dimension!')
+            # check the dimension of input
+            if series.ndim == 2:
+                e, t  = series.shape
+                running_mean = np.zeros((e, t-window+1), dtype=float)
+                for i in np.arange(t-window+1):
+                    running_mean[:,i] = np.mean(series[:,i:i+window],1)
+            elif series.ndim == 3:
+                e, t, y = series.shape
+                running_mean = np.zeros((e, t-window+1, y), dtype=float)
+                for i in np.arange(t-window+1):
+                    running_mean[:,i,:] = np.mean(series[:,i:i+window,:],1)
+            else:
+                raise IOError("This module can not work with any array with a \
+                               dimension other than 2 or 3!")
         else:
-            raise IOError("This module can not work with any array with a \
-                            dimension higher than 3!")
+            if series.ndim == 1:
+                t = len(series)
+                running_mean = np.zeros(t-window+1, dtype=float)
+                for i in np.arange(t-window+1):
+                    running_mean[i] = np.mean(series[i:i+window])
+            elif series.ndim == 2:
+                t, y = series.shape
+                running_mean = np.zeros((t-window+1, y), dtype=float)
+                for i in np.arange(t-window+1):
+                    running_mean[i,:] = np.mean(series[i:i+window,:],1)
+            else:
+                raise IOError("This module can not work with any array with a \
+                              dimension other than 1 or 2!")
+                
         self._lowpass = running_mean
 
         return self._lowpass
