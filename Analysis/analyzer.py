@@ -366,3 +366,75 @@ class statistics:
             raise IOError("This module can not work with any array with a \
                            dimension higher than 3!")
         return series_season
+
+class spatial:
+    def __init__(self, var):
+        """
+        Statistical operations on climate data.
+        param var: imput time series
+        param outpath: the path for the output files
+        """
+        print("Input array should have dimensions (year,month,lat,lon)")
+        self.var = var
+
+    def anomaly(self):
+        """
+        Remove seasonal cycling for monthly data.
+        param Dim_ens: there are two modes for removing the seasonal cycling
+        -True (default) input time series have ensemble dimension [ensemble,year,month,...]
+        -False input time series do not have ensemble dimension
+        param white_var: time series without seasonal cycling
+        return: time series
+        rtype: numpy.array
+        """
+        # white refers to the time series without seasonal cycling
+        white_var = np.zeros(self.var.shape, dtype=float)
+
+        #switch mode
+        print ('The input data does not have the dimension of ensemble.')
+        if self.var.ndim == 4:
+            seansonal_cycle_var = np.mean(self.var, axis=0)
+            t, m, y, x = white_var.shape
+            for i in np.arange(t):
+                white_var[i,:,:,:] = self.var[i,:,:,:] - seansonal_cycle_var[:]
+            # re-arrange into single time series - without month dimension
+            white_var = white_var.reshape(t*m,y,x)
+        else:
+            raise IOError("This module can only work with an array with a \
+                              dimension [year,month,lat,lon]")
+        self._anomaly = white_var
+
+        return self._anomaly
+
+    def trend(self,obj='anomaly'):
+        """
+        Compute the trend for the given time series through least square fit.
+        param series: input time series (time,lat,lon)
+        param obj: objects for detrending, two options available
+        -'anomaly' (default) the time series of anomaly will be detrended
+        -'original' the original input time series will be detrended
+        return: slope/linear trend
+        rtype: numpy.array
+        """
+        if obj == 'anomaly':
+            series = self._anomaly
+        elif obj == 'original':
+            print ("Make sure that the input time series has only 1 dimension for time!")
+            series = self.var
+        else:
+            raise IOError("Please choose the right input mode for calculating the linear trend!")
+            # check the dimension of input
+        if series.ndim == 3:
+            t, y, x = series.shape
+            a = np.zeros((y,x),dtype = float)
+            b = np.zeros((y,x),dtype = float)
+            A = np.vstack([np.arange(t),np.ones(t)]).T
+            for i in np.arange(y):
+                for j in np.arange(x):
+                    a[i,j], b[i,j] = np.linalg.lstsq(A,series[:,i,j])[0]
+        else:
+            raise IOError("This module can not work with an array with a \
+                           dimension [time,lat,lon]!")
+                
+        self._a = a
+        return self._a
